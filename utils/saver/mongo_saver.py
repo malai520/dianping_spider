@@ -19,24 +19,22 @@
           ┗━┻━┛   ┗━┻━┛
 
 """
-import sys
-
-from utils.config import global_config
-from utils.logger import logger
 from utils.spider_config import spider_config
+from utils.errors import RequestFailedError
 
 
 class MongoSaver():
     def __init__(self):
         mongo_url = spider_config.MONGO_PATH
+        if not mongo_url:
+            raise RequestFailedError('save_mode=mongo 时必须配置 mongo_path')
         try:
             import pymongo
-            client = pymongo.MongoClient(mongo_url)
+            client = pymongo.MongoClient(mongo_url, serverSelectionTimeoutMS=3000)
+            client.admin.command('ping')
             self.database = client['dianping']
-        except:
-            logger.warning(
-                u'系统中可能没有安装或启动MongoDB数据库，请先根据系统环境安装或启动MongoDB，再运行程序')
-            sys.exit()
+        except Exception as exc:
+            raise RequestFailedError('无法连接 MongoDB，请检查 mongo_path 和服务状态') from exc
 
     def save_data(self, data, data_type):
         """
@@ -63,7 +61,7 @@ class MongoSaver():
         """
         col = self.database['info']
         col.delete_many({'店铺id': data['店铺id']})
-        col.insert(data)
+        col.insert_one(data)
 
 
     def save_detail_list(self, data):
@@ -74,7 +72,7 @@ class MongoSaver():
         """
         col = self.database['info_detail']
         col.delete_many({'店铺id': data['店铺id']})
-        col.insert(data)
+        col.insert_one(data)
 
 
     def save_review_list(self, data):
@@ -85,5 +83,4 @@ class MongoSaver():
         """
         col = self.database['review']
         col.delete_many({'店铺id': data['店铺id']})
-        col.insert(data)
-
+        col.insert_one(data)

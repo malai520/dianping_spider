@@ -27,6 +27,7 @@ from function.review import Review
 from function.get_encryption_requests import *
 from utils.saver.saver import saver
 from utils.spider_config import spider_config
+from utils.requests_utils import requests_util
 
 
 class Controller():
@@ -45,7 +46,7 @@ class Controller():
             keyword = spider_config.KEYWORD
             channel_id = spider_config.CHANNEL_ID
             city_id = spider_config.LOCATION_ID
-            self.base_url = 'http://www.dianping.com/search/keyword/' + str(city_id) + '/' + str(
+            self.base_url = 'https://www.dianping.com/search/keyword/' + str(city_id) + '/' + str(
                 channel_id) + '_' + str(keyword) + '/p'
             pass
         else:
@@ -263,7 +264,7 @@ class Controller():
                 '其他信息': '-'
             })
         # 获取经纬度
-        if spider_config.NEED_LAT_AND_LNG:
+        if spider_config.NEED_LOCATION:
             lat_and_lng = get_lat_and_lng(shop_id)
             each_detail_res.update(lat_and_lng)
         saver.save_data(each_detail_res, 'detail')
@@ -274,14 +275,14 @@ class Controller():
         @param cur_page:
         @return:
         """
+        request_type = requests_util.default_request_type()
         if cur_page == 1:
-            # return self.base_url[:-2], 'no proxy, no cookie'
-            return self.base_url[:-2], 'proxy, cookie'
+            return self.base_url[:-2], request_type
         else:
             if self.base_url.endswith('p'):
-                return self.base_url + str(cur_page), 'proxy, cookie'
+                return self.base_url + str(cur_page), request_type
             else:
-                return self.base_url[:-1] + str(cur_page), 'proxy, cookie'
+                return self.base_url[:-1] + str(cur_page), request_type
 
     def saver(self, each_search_res, each_review_res):
         # save search

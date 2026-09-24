@@ -19,21 +19,20 @@
           ┗━┻━┛   ┗━┻━┛
 
 """
-import sys
-
 from bs4 import BeautifulSoup
 
 from utils.logger import logger
 from utils.get_font_map import get_search_map_file
 from utils.requests_utils import requests_util
 from utils.spider_config import spider_config
+from utils.errors import RequestFailedError
 
 
 class Search():
     def __init__(self):
         self.is_ban = False
 
-    def search(self, search_url, request_type='proxy, cookie', last_chance=False):
+    def search(self, search_url, request_type=None, last_chance=False):
         """
         搜索
         :param key_word: 关键字
@@ -42,8 +41,9 @@ class Search():
         :return:
         """
         if self.is_ban and spider_config.USE_COOKIE_POOL is False:
-            logger.warning('搜索页请求被ban，程序终止')
-            sys.exit()
+            raise RequestFailedError('搜索页连续返回 403，已停止请求')
+
+        request_type = request_type or requests_util.default_request_type()
 
         r = requests_util.get_requests(search_url, request_type=request_type)
         # 给一次retry的机会，如果依然403则判断为被ban

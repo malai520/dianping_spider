@@ -19,6 +19,8 @@
           ┗━┻━┛   ┗━┻━┛
 
 """
+import os
+
 from utils.config import global_config, require_config
 from utils.logger import logger
 
@@ -32,13 +34,22 @@ class Config():
     def __init__(self):
         # config 的 config
         self.USE_COOKIE_POOL = True if global_config.getRaw('config', 'use_cookie_pool') == 'True' else False
-        self.COOKIE = global_config.getRaw('config', 'Cookie')
-        self.USER_AGENT = global_config.getRaw('config', 'user-agent')
-        self.SAVE_MODE = global_config.getRaw('config', 'save_mode')
-        self.MONGO_PATH = global_config.getRaw('config', 'mongo_path')
+        self.COOKIE = os.environ.get(
+            'DIANPING_COOKIE', global_config.getRaw('config', 'Cookie')
+        ).strip()
+        self.USER_AGENT = global_config.getRaw('config', 'user-agent').strip()
+        self.SAVE_MODE = global_config.getRaw('config', 'save_mode').strip().lower()
+        self.MONGO_PATH = global_config.getRaw('config', 'mongo_path').strip()
         self.REQUESTS_TIMES = global_config.getRaw('config', 'requests_times')
-        self.UUID = global_config.getRaw('config', 'uuid')
-        self.TCV = global_config.getRaw('config', 'tcv')
+        try:
+            self.REQUEST_TIMEOUT = float(global_config.getRaw('config', 'request_timeout'))
+            if self.REQUEST_TIMEOUT <= 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            logger.error('request_timeout 必须为大于 0 的数字')
+            raise SystemExit(2)
+        self.UUID = os.environ.get('DIANPING_UUID', global_config.getRaw('config', 'uuid')).strip()
+        self.TCV = os.environ.get('DIANPING_TCV', global_config.getRaw('config', 'tcv')).strip()
 
         # config 的 detail
         self.KEYWORD = global_config.getRaw('detail', 'keyword')
@@ -76,7 +87,7 @@ class Config():
         self.NEED_DETAIL = True if require_config.getRaw('shop_phone', 'need') == 'True' else False
         self.NEED_PHONE_DETAIL = True if require_config.getRaw('shop_phone', 'need_detail') == 'True' else False
         if self.NEED_PHONE_DETAIL:
-            logger.warn('开启了电话详情模式，会降低速度并增加反爬概率')
+            logger.warning('开启了电话详情模式，会降低速度并增加反爬概率')
 
         # require 的 shop location
         self.NEED_LOCATION = True if require_config.getRaw('shop_location', 'need') == 'True' else False
@@ -85,7 +96,7 @@ class Config():
         self.NEED_REVIEW = True if require_config.getRaw('shop_review', 'need') == 'True' else False
         self.NEED_REVIEW_DETAIL = True if require_config.getRaw('shop_review', 'more_detail') == 'True' else False
         if self.NEED_REVIEW_DETAIL:
-            logger.warn('开启了评论详情模式，会降低速度并增加反爬概率')
+            logger.warning('开启了评论详情模式，会降低速度并增加反爬概率')
             try:
                 self.NEED_REVIEW_PAGES = int(require_config.getRaw('shop_review', 'need_pages'))
             except:

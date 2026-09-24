@@ -32,7 +32,8 @@ class Review():
         self.pages_needed = spider_config.NEED_REVIEW_PAGES
         self.is_ban = False
 
-    def get_review(self, shop_id, request_type='proxy, cookie', last_chance=False):
+    def get_review(self, shop_id, request_type=None, last_chance=False):
+        request_type = request_type or requests_util.default_request_type()
         if self.is_ban and spider_config.USE_COOKIE_POOL is False:
             logger.warning('评论页请求被ban，程序继续运行')
             return_data = {
@@ -50,10 +51,10 @@ class Review():
         cur_pages = 1
         all_review = []
         while all_pages == -1 or all_pages > 0:
-            url = 'http://www.dianping.com/shop/' + str(shop_id) + '/review_all/p' + str(cur_pages)
+            url = 'https://www.dianping.com/shop/' + str(shop_id) + '/review_all/p' + str(cur_pages)
             # 访问p1会触发验证码，因此对第一页单独处理
             if cur_pages == 1:
-                url = 'http://www.dianping.com/shop/' + str(shop_id) + '/review_all'
+                url = 'https://www.dianping.com/shop/' + str(shop_id) + '/review_all'
             print(url)
             r = requests_util.get_requests(url, request_type=request_type)
             # 给一次retry的机会，如果依然403则判断为被ban
@@ -173,7 +174,7 @@ class Review():
                     review_pic_list_temp = review.select('.review-pictures')[0].select('a')
                     for each in review_pic_list_temp:
                         url = each['href']
-                        review_pic_list.append('http://www.dianping.com' + str(url))
+                        review_pic_list.append('https://www.dianping.com' + str(url))
                 except:
                     review_pic_list = []
 

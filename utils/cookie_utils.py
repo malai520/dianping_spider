@@ -43,7 +43,9 @@ class CookieCache():
         with open('cookies.txt', 'r', encoding='utf-8') as f:
             lines = f.readlines()
         for line in lines:
-            self.all_cookie.append([line.strip(), 0, 0, 0])
+            cookie = line.strip()
+            if cookie and not cookie.startswith('#'):
+                self.all_cookie.append([cookie, 0, 0, 0])
 
     def get_header(self, cookie):
         ua = spider_config.USER_AGENT
@@ -60,24 +62,27 @@ class CookieCache():
         """
         检查cookie，定时任务，恢复&去掉 review、detail标记
         """
-        review_test_url = 'http://www.dianping.com/shop/F8oeMhRBwBa99Z70/review_all/p34'
-        detail_test_url = 'http://www.dianping.com/shopold/pc?shopuuid=G1PUPaOlLNpU8Z1h'
-        search_test_url = 'http://www.dianping.com/dalian/ch10/g110p5'
+        review_test_url = 'https://www.dianping.com/shop/F8oeMhRBwBa99Z70/review_all/p34'
+        detail_test_url = 'https://www.dianping.com/shopold/pc?shopuuid=G1PUPaOlLNpU8Z1h'
+        search_test_url = 'https://www.dianping.com/dalian/ch10/g110p5'
         for i in range(len(self.all_cookie)):
             # check search
-            r = requests.get(search_test_url, headers=self.get_header(str(self.all_cookie[i][0]).strip()))
+            r = requests.get(search_test_url, headers=self.get_header(str(self.all_cookie[i][0]).strip()),
+                             timeout=spider_config.REQUEST_TIMEOUT)
             if r.status_code != 200:
                 self.all_cookie[i][1] = 1
             if r.status_code == 200:
                 self.all_cookie[i][1] = 0
             # check detail
-            r = requests.get(detail_test_url, headers=self.get_header(str(self.all_cookie[i][0]).strip()))
+            r = requests.get(detail_test_url, headers=self.get_header(str(self.all_cookie[i][0]).strip()),
+                             timeout=spider_config.REQUEST_TIMEOUT)
             if r.status_code != 200:
                 self.all_cookie[i][2] = 1
             if r.status_code == 200:
                 self.all_cookie[i][2] = 0
             # check review
-            r = requests.get(review_test_url, headers=self.get_header(str(self.all_cookie[i][0]).strip()))
+            r = requests.get(review_test_url, headers=self.get_header(str(self.all_cookie[i][0]).strip()),
+                             timeout=spider_config.REQUEST_TIMEOUT)
             if r.status_code != 200:
                 self.all_cookie[i][3] = 1
             if r.status_code == 200:
@@ -97,7 +102,8 @@ class CookieCache():
         开启多线程开始cookie检查
         :return:
         """
-        _thread.start_new_thread(self.timing_check, ())
+        if spider_config.USE_COOKIE_POOL and self.all_cookie:
+            _thread.start_new_thread(self.timing_check, ())
 
     def get_cookie(self, mission_type):
         """

@@ -1,5 +1,9 @@
 # Sniper
 
+## 维护文档
+
+- [本地运行修复设计与验证记录](./docs/local-runtime-repair.md)
+
 
 
 [![](https://img.shields.io/badge/python-3-brightgreen.svg)](https://www.python.org/downloads/)
@@ -20,7 +24,7 @@
 
 目前支持的写入类型如下：
 - MongoDB数据库
-- ~~csv~~（版本更新后不支持写入，暂时没有适配计划）
+- CSV（本地默认，输出到 `output/`）
 
 
 如果您需要其他数据库支持，联系我们或者您添加后提PR。
@@ -92,6 +96,26 @@
 
     pip install -r requirements.txt
 
+### 本地快速启动
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m unittest discover -s tests -v
+.venv/bin/python main.py --help
+.venv/bin/python main.py --normal 1
+```
+
+默认配置不包含 Cookie、不使用代理、只访问一页并输出 CSV。当前大众点评可能把匿名搜索重定向到登录页，此时程序以退出码 `3` 明确停止；人工验证对应退出码 `4`，请求失败对应退出码 `5`。程序不会自动处理登录或验证码。
+
+如需验证用户本人已登录的会话，优先通过临时环境变量传入，不要修改并提交 `config.ini`：
+
+```bash
+DIANPING_COOKIE='手工登录后取得的 Cookie' .venv/bin/python main.py --normal 1
+```
+
+`uuid` 和 `tcv` 也可分别通过 `DIANPING_UUID`、`DIANPING_TCV` 提供。遇到官方验证页面时必须手工处理，程序不会自动绕过。
+
 ## 使用方法：
 
 
@@ -104,13 +128,14 @@
 |:-----  |-----|
 |config：      |  |
 |use_cookie_pool      |是否使用cookie池 |
-|Cookie      |Cookie信息（注意大写，之所以不一样是方便将浏览器信息直接复制进去而不做更改）。|
+|Cookie      |可选的登录 Cookie；不得提交到仓库，建议仅在本地临时配置。|
 |uuid      |uuid信息，[详见](./docs/json.md)|
 |tcv      |tcv信息，[详见](./docs/json.md)|
 |user-agent      |浏览器UA信息，和配置文件中说明不同的是，目前暂时不支持随机UA|
-|save_mode      |保存方式，具体格式参照config.ini提示。（目前只能为mongo/mongodb） |
+|save_mode      |保存方式，支持 `csv` 或 `mongo`，本地默认 `csv`。 |
 |mongo_path      |mongo数据库配置，具体格式参照config.ini提示|
 |requests_times      |爬虫间隔时间，具体格式参照config.ini提示。  |
+|request_timeout      |单次网络请求超时秒数。  |
 |detail：      |  |
 |keyword      | 搜索关键字 |
 |location_id      |地区id，具体格式参照config.ini提示。 [详见](./docs/location.md )  |
@@ -201,6 +226,3 @@
   - [评论页字体加密加密](http://www.sniper97.cn/index.php/note/carwler/3707/)
 
 如果你想加快进度，点个star吧呜呜呜
-
-
-

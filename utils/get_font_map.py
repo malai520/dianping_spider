@@ -22,7 +22,6 @@
 
 import re
 import os
-import sys
 import datetime
 import json
 import pickle
@@ -35,6 +34,7 @@ import logging
 from utils.logger import logger as global_logger
 from utils.get_file_map import get_map
 from utils.requests_utils import requests_util
+from utils.errors import RequestFailedError
 
 
 def get_search_map_file(page_source):
@@ -51,8 +51,7 @@ def get_search_map_file(page_source):
     try:
         font_base_url = re.findall(' href="(//s3plus.meituan.net/v1/.*?)">', page_source)[0]
     except:
-        global_logger.warning('cookie失效或者被限制访问，更新cookie或登录大众点评滑动验证')
-        sys.exit()
+        raise RequestFailedError('页面中没有找到搜索字体样式，可能需要登录或页面结构已经变化')
     # global_logger.info('更新搜索页面加密字体映射文件')
     font_base_url = 'https:' + font_base_url
     # header = get_header()
@@ -357,8 +356,7 @@ def get_review_map_file(page_source):
     try:
         css_url = 'https:' + re.findall(' href="(//s3plus.meituan.net/v1/.*?)">', page_source)[0]
     except:
-        global_logger.warning('cookie失效或者被限制访问，更新cookie或登录大众点评滑动验证')
-        sys.exit()
+        raise RequestFailedError('页面中没有找到评论字体样式，可能需要登录或页面结构已经变化')
     # 下载css文件
     r = requests_util.get_requests(css_url, request_type='no header')
     with open('./tmp/review_css.css', 'wb') as f:
@@ -394,8 +392,7 @@ def get_review_map_file(page_source):
             font_height_offset = 15
             font_weight_offset = 0
         else:
-            global_logger.warning('评论页字体变更，尝试修改代码或者联系作者')
-            sys.exit()
+            raise RequestFailedError('评论页字体结构已经变化，无法安全解析')
         # 第一种文件格式解析
         re_font_loc = re.findall('<path id="(.*?)" d="M0 (.*?) H600"/>', r.text)
         font_loc = {}

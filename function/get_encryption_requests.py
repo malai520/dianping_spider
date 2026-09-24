@@ -50,7 +50,7 @@ def get_shop_url(shop_id):
     @param shop_id:
     @return:
     """
-    shop_url = 'http://www.dianping.com/shopold/pc?shopuuid=' + str(shop_id)
+    shop_url = 'https://www.dianping.com/shopold/pc?shopuuid=' + str(shop_id)
     return shop_url
 
 
@@ -88,7 +88,7 @@ def get_basic_hidden_info(shop_id):
     """
     assert len(shop_id) == len('H2noKWCDigM0H9c1')
     shop_url = get_shop_url(shop_id)
-    url = 'http://www.dianping.com/ajax/json/shopDynamic/basicHideInfo?' \
+    url = 'https://www.dianping.com/ajax/json/shopDynamic/basicHideInfo?' \
           'shopId=' + str(shop_id) + \
           '&_token=' + str(get_token(shop_url)) + \
           '&tcv=' + str(spider_config.TCV) + \
@@ -161,7 +161,7 @@ def get_review_and_star(shop_id):
     """
     assert len(shop_id) == len('H2noKWCDigM0H9c1')
     shop_url = get_shop_url(shop_id)
-    url = 'http://www.dianping.com/ajax/json/shopDynamic/reviewAndStar?' \
+    url = 'https://www.dianping.com/ajax/json/shopDynamic/reviewAndStar?' \
           'shopId=' + str(shop_id) + \
           '&cityId=19' \
           '&mainCategoryId=2821' \
@@ -230,7 +230,7 @@ def get_basic_review(shop_id):
     """
     assert len(shop_id) == len('H2noKWCDigM0H9c1')
     shop_url = get_shop_url(shop_id)
-    url = 'http://www.dianping.com/ajax/json/shopDynamic/allReview?' \
+    url = 'https://www.dianping.com/ajax/json/shopDynamic/allReview?' \
           'shopId=' + str(shop_id) + \
           '&cityId=19' \
           '&shopType=10' \

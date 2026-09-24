@@ -39,19 +39,19 @@ class Detail():
         @param shop_id:
         @return:
         """
-        url = 'http://www.dianping.com/shopold/pc?shopuuid=' + str(shop_id)
-        r = requests_util.get_requests(url, request_type='proxy, cookie')
+        url = 'https://www.dianping.com/shopold/pc?shopuuid=' + str(shop_id)
+        r = requests_util.get_requests(url, request_type=requests_util.default_request_type())
         # 对于部分敏感ip（比如我的ip，淦！）可能需要带cookie才允许访问
         # request handle v2
         if r.status_code == 403:
-            logger.error('使用代理吧小伙汁')
-            exit()
+            raise RuntimeError('详情页返回 403，请停止请求并检查登录状态')
         text = r.text
         file_map = get_search_map_file(text)
         cache.search_font_map = file_map
         return file_map
 
-    def get_detail(self, shop_id, request_type='proxy, cookie', last_chance=False):
+    def get_detail(self, shop_id, request_type=None, last_chance=False):
+        request_type = request_type or requests_util.default_request_type()
         if self.is_ban and spider_config.USE_COOKIE_POOL is False:
             logger.warning('详情页请求被ban，程序继续运行')
             return_data = {
@@ -64,7 +64,7 @@ class Detail():
                 '其他信息': 'ban'
             }
             return return_data
-        url = 'http://www.dianping.com/shopold/pc?shopuuid=' + str(shop_id)
+        url = 'https://www.dianping.com/shopold/pc?shopuuid=' + str(shop_id)
         r = requests_util.get_requests(url, request_type=request_type)
         # 给一次retry的机会，如果依然403则判断为被ban
         if r.status_code == 403:

@@ -25,15 +25,20 @@ import sys
 import time
 import json
 import requests
+from requests import RequestException
 from tqdm import tqdm
 from faker import Factory
 
-from utils.cache import cache
 from utils.config import global_config
 from utils.logger import logger
 from utils.get_file_map import get_map
 from utils.cookie_utils import cookie_cache
 from utils.spider_config import spider_config
+from utils.errors import (
+    AuthenticationRequiredError,
+    RequestFailedError,
+    VerificationRequiredError,
+)
 
 
 class RequestsUtils():
@@ -44,6 +49,7 @@ class RequestsUtils():
     def __init__(self):
         requests_times = spider_config.REQUESTS_TIMES
         self.cookie = spider_config.COOKIE
+        self.timeout = spider_config.REQUEST_TIMEOUT
         self.ua = spider_config.USER_AGENT
         self.ua_engine = Factory.create()
         if self.ua is None:
@@ -102,7 +108,7 @@ class RequestsUtils():
 
         # 不需要请求头的请求不计入统计（比如字体文件下载）
         if request_type == 'no header':
-            r = requests.get(url=url)
+            r = self._get(url=url)
             return r
 
         # 所有本地ip的请求都进入全局监控，no header由于只用于字体文件下载，不计入监控
@@ -110,11 +116,11 @@ class RequestsUtils():
             self.freeze_time()
 
             if request_type == 'no proxy, no cookie':
-                r = requests.get(url, headers=self.get_header(cookie=None, need_cookie=False))
+                r = self._get(url, headers=self.get_header(cookie=None, need_cookie=False))
 
             if request_type == 'no proxy, cookie':
                 cur_cookie = self.get_cookie(url)
-                r = requests.get(url, headers=self.get_header(cookie=cur_cookie, need_cookie=True))
+                r = self._get(url, headers=self.get_header(cookie=cur_cookie, need_cookie=True))
 
             return self.handle_verify(r=r, url=url, request_type=request_type)
 
@@ -126,7 +132,7 @@ class RequestsUtils():
         if request_type == 'proxy, no cookie':
             if self.ip_proxy:
                 # 这个while是处理代理失效的问题（通常是超时等问题）
-                r = requests.get(url, headers=self.get_header(None, False), proxies=self.get_proxy(), timeout=10)
+                r = self._get(url, headers=self.get_header(None, False), proxies=self.get_proxy())
                 # 接口专属请求做过重试了（max retry），因此这里的while暂时不用
                 # while True:
                 #     try:
@@ -135,7 +141,7 @@ class RequestsUtils():
                 #     except:
                 #         pass
             else:
-                r = requests.get(url, headers=self.get_header(None, False))
+                r = self._get(url, headers=self.get_header(None, False))
             return self.handle_verify(r, url, request_type)
 
         if request_type == 'proxy, cookie':
@@ -146,9 +152,9 @@ class RequestsUtils():
             header = self.get_header(cookie=cur_cookie, need_cookie=True)
 
             if self.ip_proxy:
-                r = requests.get(url, headers=header, proxies=self.get_proxy(), timeout=10)
+                r = self._get(url, headers=header, proxies=self.get_proxy())
             else:
-                r = requests.get(url, headers=header)
+                r = self._get(url, headers=header)
 
             # 对于cookie池的使用，反馈cookie池状态
             if spider_config.USE_COOKIE_POOL and r.status_code != 200:
@@ -161,6 +167,20 @@ class RequestsUtils():
             return self.handle_verify(r, url, request_type)
         # 其他
         raise AttributeError
+
+    def default_request_type(self):
+        if self.cookie_pool or self.cookie:
+            return 'proxy, cookie'
+        return 'proxy, no cookie'
+
+    def _get(self, url, **kwargs):
+        kwargs.setdefault('timeout', self.timeout)
+        try:
+            return requests.get(url, **kwargs)
+        except RequestException as exc:
+            raise RequestFailedError(
+                f'请求失败：{type(exc).__name__}，目标={url.split("?", 1)[0]}'
+            ) from exc
 
     def freeze_time(self):
         """
@@ -178,23 +198,13 @@ class RequestsUtils():
                     break
 
     def handle_verify(self, r, url, request_type):
-        # 这里只做验证码处理，不做其他判断（例如403）
-        # 原因是很多地方需要不同的处理方法，全部移到这里基于现有架构代价有点大
-        if 'verify' in r.url:
-            """
-            不管是使用真实ip还是真实cookie，都对验证码进行处理
-            这里有一个问题，就是cookie池到底处不处理验证码，如果处理，
-            一定程度上丧失了cookie池的意义，如果不处理，失效的太快。
-            暂时处理
-            """
-            if request_type is not 'proxy, no cookie' or not spider_config.USE_PROXY:
-                print('处理验证码，按任意键回车后继续', r.url)
-                input()
-            else:
-                print('verify')
-            return self.get_requests(url, request_type)
-        else:
-            return r
+        """Stop at login/risk-control boundaries instead of retrying forever."""
+        final_url = (r.url or '').lower()
+        if any(marker in final_url for marker in ('/pclogin', 'account.dianping.com')):
+            raise AuthenticationRequiredError(r.url)
+        if any(marker in final_url for marker in ('verify', 'yoda', 'captcha')):
+            raise VerificationRequiredError(r.url)
+        return r
 
     def get_retry_time(self):
         """
@@ -217,26 +227,22 @@ class RequestsUtils():
         retry_time = self.get_retry_time()
         while True:
             retry_time -= 1
-            r = requests_util.get_requests(url, request_type='proxy, cookie')
+            r = requests_util.get_requests(url, request_type=self.default_request_type())
             try:
                 # request handle v2
                 r_json = json.loads(r.text)
                 if r_json['code'] == 406:
-                    # 处理代理模式冷启动时，首条需要验证
-                    # （虽然我也不知道为什么首条要验证，本质上切换ip都是首条。但是这样做有效）
-                    if cache.is_cold_start is True:
-                        print('处理验证码,按任意键回车继续:', r_json['customData']['verifyPageUrl'])
-                        input()
-                        r = requests_util.get_requests(url, request_type='proxy, cookie')
-                        cache.is_cold_start = False
+                    verify_url = r_json.get('customData', {}).get('verifyPageUrl', url)
+                    raise VerificationRequiredError(verify_url)
                 # 前置验证码过滤
                 if r_json['code'] == 200:
                     break
-            except:
+            except VerificationRequiredError:
+                raise
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
                 pass
             if retry_time <= 0:
-                logger.warning('替换tsv和uuid，或者代理质量较低')
-                exit()
+                raise RequestFailedError('接口重试次数耗尽，请检查登录状态、uuid/tcv 或站点兼容性')
         return r
 
     def get_cookie(self, url):
@@ -245,12 +251,9 @@ class RequestsUtils():
         @return:
         """
         if spider_config.USE_COOKIE_POOL:
-            while True:
-                cur_cookie = cookie_cache.get_cookie(mission_type=self.judge_request_type(url))
-                if cur_cookie is not None:
-                    break
-                logger.info('所有cookie均已失效，替换（替换后等待一段时间会自动继续）或等待解封')
-                time.sleep(60)
+            cur_cookie = cookie_cache.get_cookie(mission_type=self.judge_request_type(url))
+            if cur_cookie is None:
+                raise AuthenticationRequiredError('https://account.dianping.com/pclogin')
         else:
             cur_cookie = self.cookie
         return cur_cookie
@@ -304,7 +307,7 @@ class RequestsUtils():
             # 代理池为空，提取代理
             if len(self.proxy_pool) == 0:
                 proxy_url = spider_config.HTTP_LINK
-                r = requests.get(proxy_url)
+                r = self._get(proxy_url)
                 r_json = r.json()
                 # json解析方式替换
                 # for proxy in r_json['Data']:
@@ -322,8 +325,7 @@ class RequestsUtils():
             proxies = self.key_proxy_utils()
             return proxies
         else:
-            logger.warning('使用代理时，必须选择http提取或秘钥提取中的一个')
-            exit()
+            raise RequestFailedError('使用代理时，必须选择 http_extract 或 key_extract')
         pass
 
     def http_proxy_utils(self, ip, port):
